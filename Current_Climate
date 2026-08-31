@@ -1,0 +1,76 @@
+# Code used to download current climate data (1981-2010) from CHELSA
+
+  crop_proj<-list()
+
+  direct1<-paste0("Download_file_path/...")
+  dir.create(direct1, showWarnings = FALSE)
+  
+  # Base URL for CHELSA v2.1
+  base_url <- "https://os.zhdk.cloud.switch.ch/envidat/chelsa/chelsa_V2/GLOBAL/climatologies/1981-2010/bio/"
+  
+  
+  # Download BIO1-BIO19
+  for(i in 1:19) {
+    if(i<10){
+      filep<-sprintf("bio0%d",i)}else{
+        filep<-sprintf("bio%d",i)}
+    
+    filename<-paste0("CHELSA_", filep, "_1981-2010_V.2.1.tif")
+    fil<-paste0(filep, "/1981-2010/", filename)
+    
+    url <- paste0(base_url, fil)
+    destfile <- file.path(direct1, "1981-2010", filep)
+    
+    cat("Downloading", filename, "...\n")
+    download.file(url, destfile=paste0(destfile, ".tif"), mode = "wb")
+  }
+  
+  # Download scd
+
+  filep<-"scd"
+  filename<-paste0("CHELSA_", filep, "_1981-2010_V.2.1.tif")
+  fil<-paste0(filep, "/1981-2010/", filename)
+  
+  url <- paste0(base_url, fil)
+  destfile <- file.path(direct1, "1981-2010", filep)
+  
+  download.file(url, destfile=paste0(destfile, ".tif"), mode = "wb")
+  
+  direct2<-paste0("File_path/load_location/...")
+  
+  bio_files <- list.files(direct2, pattern = ".tif$", full.names = TRUE)
+
+  #create stack of all raster layers
+  current_st <- rast(bio_files)
+  
+  current<-list()
+  
+  
+  euroshp1<-st_read(paste0("path_to_europe_shapefile/included_in_GITHUB_repo..."))
+  euroext<-ext(euroshp1)
+  euroshpv <- vect(euroshp1)
+
+  # Crop and mask rasters to Europe
+
+  for(bio in names(current_st)){
+    
+    file<-paste0("cropped_file_path/...")
+    direc<-path(file, bio, "current")
+    
+    if(length(list.files(direc))==0){cat("cropping", bio, "\n") # ensures not to double-crop
+      
+      dir_create(direc)
+      sv_name<-paste0(bio, "_crop")
+      
+      spat<-current_st[[bio]]
+      spat_crop<-crop(spat, euroext)
+      spat_mask <- mask(spat_crop, euroshpv)
+      
+      writeRaster(spat_mask, filename = paste0(direc, "/", sv_name, ".tif"), overwrite = TRUE)
+      
+    }else{cat("Loading file", bio, "\n")
+      
+      spat_mask<-rast(list.files(direc, full.names = TRUE))    }
+    
+  current[[bio]]<-spat_mask}
+  current<-rast(current)
