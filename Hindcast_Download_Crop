@@ -1,0 +1,118 @@
+# Download all hindcast layers ####
+
+              plan(multisession, workers = 4)  # Adjust  based cores 
+              options(future.globals.maxSize = 4 * 1024^3)
+              
+              
+              url_fc <- readLines(paste0("save_location_of_URL_txt_file/envidatS3bio.txt"))
+              
+              options(timeout = 600)  
+        
+              #  verify it's set
+              getOption("timeout")
+              
+             # Wrap in future_lapply for parallel downloads
+              with_progress({
+                p <- progressor(along = url_fc)
+                
+                future_lapply(seq_along(url_fc), function(i) {
+                  url <- trimws(url_fc[i])
+                  parts <- strsplit(url, "/")[[1]]
+                  
+                  options(timeout = 600) 
+                  
+                  bio <- sub(".*?/(bio[0-9]{2}|glz|orog|scd|swe)/.*", "\\1", url)
+                  base <- basename(url)
+                  part2 <- strsplit(base, "_")[[1]]
+                  
+                  year <- part2[grep("^-[0-9]{3}$", part2)]
+                  if(length(year) == 0) {
+                    year <- part2[grep("^[0-9]{4}$", part2)]
+                  }
+                  
+                  direct2 <- paste0("location_to_save_new_hindcast/...")
+                  dir_create(paste0(direct2, year))
+                  dest <- paste0(direct2, year, "/", bio, ".tif")
+                  
+                  if(!file.exists(dest)) {
+                    download.file(url, destfile = dest, mode = "wb", quiet = TRUE)
+                  }
+                  
+                  p(sprintf("Downloaded %s %s", bio, year))
+                  return(NULL)
+                })
+              })
+              
+            plan(sequential) # ensures to end/close the parallel clusters
+
+# Crop hindcast layers ####
+
+#bioclim_layers selected from current model. 
+        bioclim_layers<-c("bio04", "bio03", "bio13", "bio19", "bio14", "bio18", "scd",   "bio02")
+
+        direct2 <- paste0("location_to_original_hindcast/...") #from where they're downloaded
+        folders <- list.files(direct2, full.names = FALSE)
+
+#Europe shapefile         
+      euroshp1<-st_read(paste0("path_to_europe_shapefile/included_in_GITHUB_repo..."))
+      euroext<-ext(euroshp1)
+      euroshpv <- vect(euroshp1)
+      
+          #Folders were organised into years when downloaded
+          for(years in folders){
+            
+            string1 <- paste0("new_crop_file_location/...", years, ".tif")
+            gc()
+            options(timeout = 600) 
+            
+            # ! means if file doesnt exist 
+            if(!file.exists(string1)) {
+              
+              filz<-(list.files(paste0(direct2, years, "/"), full.names = TRUE))
+              
+              st1 <- terra::rast(filz)
+              
+              for(lay in names(st1)){
+                
+                lay1<-st1[[lay]]
+                
+                #ensure they downloaded correctly
+                is_corrupt <- tryCatch({ 
+                  lay1[1, 1]
+                  FALSE 
+                }, error = function(e) { 
+                  TRUE 
+                })
+                                
+                if(is_corrupt) {cat(lay, years, "is corrupt\n") #redownload corrupt files... here i just paste the first line (url_fc[[1]]) and remove the year (-001)
+                  
+                  url<-print(url_fc[[1]])
+                  url <- gsub("(bio[0-9]{2}|glz|orog|scd|swe)", paste(lay), paste(url))
+                  url <- gsub("-001", paste(years), paste(url)) 
+                  url <- trimws(url)
+                  
+                  dest <- paste0(direct2, years, "/", lay, ".tif")
+                  
+                  download.file(url, destfile = dest, mode = "wb", quiet = TRUE)
+                  
+                  lay2<-rast(dest)
+                  st1[[lay]]<-lay2
+                  
+                }else{}}
+              
+              
+              #This can be added to only crop the layers used in the model. It'll cut down time and memory used 
+              # st1_new<-keep_layers(st1, bioclim_layers)
+              
+            
+              stack_crop <- terra::crop(st1, euroext)
+              stack_crop <- terra::mask(stack_crop, euroshpv)
+              
+              writeRaster(stack_crop, filename = string1, overwrite = TRUE)
+              
+              cat(sprintf("Cropped %s", years)) }
+          }
+
+
+
+
