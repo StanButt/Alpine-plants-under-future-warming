@@ -1,0 +1,48 @@
+# Packages used throughout SDM creation
+
+start<-{
+  
+  options(java.parameters = "-Xmx30g")
+  
+  # tempdir_path <- "temp_directory_to_save_rasters/..."
+  #  dir.create(tempdir_path, showWarnings = FALSE)
+  # rasterOptions(tmpdir = tempdir_path)
+  
+  library(sf) 
+  library(raster) 
+  library(spThin)
+  library(ggplot2)
+  options(stringsAsFactors = FALSE)
+  library(tidyverse)
+  library(dplyr)
+  library(terra)
+  library(rJava)
+  library(fs)
+  library(flexsdm)
+  library(future)
+  library(future.apply)
+  library(progressr)
+  library(usdm)
+  library(ape)
+  library(spdep)
+  library(sp)
+  library(dismo)
+  library(pdp)
+}
+
+# Functions used throughout
+
+clean_raster_names <- function(raster_stack, patterns) {
+    names_stack <- names(raster_stack)
+    for (pattern in patterns) {
+      names_stack <- sub(pattern, "", names_stack)
+    }
+    names(raster_stack) <- names_stack
+    return(raster_stack)}
+  
+
+keep_layers <- function(env, environ) {
+    all_layers <- names(env)
+    layers_to_keep <- intersect(all_layers, environ)
+    env <- env[[layers_to_keep]]}
+  
