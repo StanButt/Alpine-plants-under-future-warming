@@ -1,0 +1,66 @@
+years<-c("2011-2040", "2041-2070", "2071-2100")
+env<-bioclim_layers # i renamed, is an artifact from many versions of this script. 
+ssp<-c("ssp126", "ssp370", "ssp585")
+
+  euroshp1<-st_read(paste0("path_to_europe_shapefile/included_in_GITHUB_repo..."))
+  euroext<-ext(euroshp1)
+  euroshpv <- vect(euroshp1)
+
+base_url2<-"https://os.unil.cloud.switch.ch/chelsa02/chelsa/global/bioclim"
+direct1<-paste0("new_file_location/Layers/Forecast/chelsa")
+
+for(bioc in env){  
+    
+    for(yr in years){ 
+    
+      for(sp in ssp){
+
+        list<-list()
+        list[["wget1"]]<-paste0("/GFDL-ESM4/",sp, "/CHELSA_gfdl-esm4_", sp, "_", bioc, "_", yr, "_V.2.1.tif")
+        list[["wget2"]]<-paste0("/IPSL-CM6A-LR/",sp, "/CHELSA_ipsl-cm6a-lr_", sp, "_", bioc, "_", yr, "_V.2.1.tif")
+        list[["wget3"]]<-paste0("/MPI-ESM1-2-HR/",sp, "/CHELSA_mpi-esm1-2-hr_", sp, "_", bioc, "_", yr, "_V.2.1.tif")
+        list[["wget4"]]<-paste0("/MRI-ESM2-0/",sp, "/CHELSA_mri-esm2-0_", sp, "_", bioc, "_", yr, "_V.2.1.tif")
+        list[["wget5"]]<-paste0("/UKESM1-0-LL/",sp, "/CHELSA_ukesm1-0-ll_", sp, "_", bioc, "_", yr, "_V.2.1.tif")
+
+           
+      for(each in list){
+        
+        filename<-basename(each)
+        url<-path(base_url2, bioc, yr, each)
+        dest_dir<-path(direct1, yr, bioc, sp)
+        
+        dir_create(dest_dir)
+
+        download_file<-paste0(dest_dir, "/", filename)
+        
+        if(!file.exists(download_file)){ cat("downloading", filename) #ensures not to double-download
+          
+          download.file(url, destfile=paste0(dest_dir, "/", filename), mode = "wb")}
+        
+        # crop downloaded file
+
+      dest_dir2<-path(paste0(direct1,"_crop"), yr, bioc, sp)
+      dir_create(dest_dir2)
+      file_crop<-paste0(dest_dir2, "/crop_", filename )
+              
+        if(!file.exists(file_crop)){
+          r1<-rast(paste0(dest_dir, "/", filename))
+          
+          cr1<-crop(r1, euroext)
+          cr1<-mask(cr1, euroshpv)
+          
+          writeRaster(cr1, filename=paste0(file_crop))
+          
+        } else{}}
+        
+        #once the list of cropped files is greater than 4 (as there are 5 models), create a raster of the mean
+            if(length(list.files(dest_dir2))>4){
+              
+            spat<-rast(list.files(dest_dir2, full.names = TRUE))
+            
+            spat_mean<-mean(spat)
+            
+            file_crop2<-paste0(dest_dir2,"/", bioc, "_mcrop.tif")
+              
+            writeRaster(spat_mean, filename=paste0(file_crop2), overwrite=TRUE)
+            }else{}}}}
