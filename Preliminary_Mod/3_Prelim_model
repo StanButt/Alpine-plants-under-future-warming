@@ -1,0 +1,57 @@
+# Create prelim models with VIF layers ####
+
+models<-list()
+  
+    raf_ab<-fit_raf(data=dat_extr, 
+                    response = "pr_ab", 
+                    predictors=names(current), 
+                    partition=".part", 
+                    thr = "max_sens_spec")
+    
+    glm_ab<-fit_glm(data=dat_extr, 
+                    response = "pr_ab", 
+                    predictors=names(current), 
+                    partition=".part", 
+                    thr = "max_sens_spec", poly=2)
+    
+    gam_ab<-fit_gam(data=dat_extr, 
+                    response = "pr_ab", 
+                    predictors=names(current), 
+                    partition=".part", 
+                    thr = "max_sens_spec")
+    
+    model_ens <- fit_ensemble(
+      models=list(gam_ab, glm_ab, raf_ab),
+      ens_method = "meansup", 
+      thr=NULL, 
+      thr_model="max_sens_spec", 
+      metric = "TSS")
+    
+    
+    models[["RF"]]<-raf_ab
+    models[["GLM"]]<-glm_ab
+    models[["GAM"]]<-gam_ab
+    models[["ENS"]]<-model_ens
+    
+    save_path<-paste0(hdd_local, "/Data/models_new.rds")
+    saveRDS(models, file = (save_path))
+
+# Print model performance ####
+
+cat("\n
+True skill statistic \nRAF == ", raf_ab$performance$TSS_mean, "\nGLM == ", glm_ab$performance$TSS_mean, "\nGAM ==", gam_ab$performance$TSS_mean,"\nEnsemble ==", model_ens$performance$TSS_mean[[5]], 
+    
+    "\n
+Area under curve \nRAF == ", raf_ab$performance$AUC_mean, "\nGLM == ", glm_ab$performance$AUC_mean, "\nGAM ==", gam_ab$performance$AUC_mean, "\nEnsemble ==", model_ens$performance$AUC_mean[[5]], 
+    
+    "\n
+Sensitivity \nRAF == ", raf_ab$performance$TPR_mean, "\nGLM == ", glm_ab$performance$TPR_mean, "\nGAM ==", gam_ab$performance$TPR_mean, "\nEnsemble ==", model_ens$performance$TPR_mean[[5]], 
+    
+    "\n
+Specificity \nRAF == ", raf_ab$performance$TNR_mean, "\nGLM == ", glm_ab$performance$TNR_mean, "\nGAM ==", gam_ab$performance$TNR_mean, "\nEnsemble ==", model_ens$performance$TNR_mean[[5]])
+
+cat("\n Variance of TSS in models\n", 
+    "ensemble \n", 
+    model_ens$performance$TSS_sd[[5]],
+    "Random forest \n", 
+    raf_ab$performance$TSS_sd)
