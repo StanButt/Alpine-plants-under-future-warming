@@ -1,0 +1,23 @@
+
+current_df <- na.omit(as.data.frame(current, xy = FALSE))
+vif_results <- vifstep(current_df, th = 10)
+
+ vif_selected <- vif_results@results$Variables
+
+### 6.2.1 Add env data to spatial blocks ####
+  
+# new current layers (and save old)
+
+current_OG<-current
+current<-keep_layers(current, vif_selected)
+
+  data_part2<-data_part$part
+  
+  dat_extr<-sdm_extract(data=data_part2,
+                        x="x", 
+                        y="y", 
+                        env_layer = current)
+ 
+  saveRDS(dat_extr, file = paste0(hdd_local, "/Data/sblock_env_new.rds"))
+
+# bioclim_layers<-vif_selected # If results are different from previous
