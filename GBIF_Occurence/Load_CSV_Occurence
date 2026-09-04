@@ -1,0 +1,63 @@
+point_path<- paste0("File_location/...")
+arabis<-read.csv(paste0(point_path, "File_location/.../occurence.csv"))
+abdecade<-read.csv(paste0(point_path, "/File_location/.../decade.csv"))
+
+## Prepare points ####
+###  Crop points to extent ####
+
+unique(abdecade$group)
+coordinates(abdecade) <- ~decimalLon+decimalLat
+proj4string(abdecade) <- CRS("+proj=longlat +datum=WGS84")
+
+abcrop<-crop(abdecade, euroshp1)
+
+abcrop<-as.data.frame(abcrop)
+abcrop<-rename(abcrop, lon=x, lat=y)
+
+###  Spatially thin points ####
+
+abcrop$species<-paste("arabis") # thin needs a species column
+
+#loop to keep 'group' column
+#originally had rep = 5, but changed this to 1 when the data was coming back larger
+
+rm(abdecade)
+
+grp_list<-list()
+groups<-unique(abcrop$group)
+
+for(grp in groups) {
+  
+  subgrp<-subset(abcrop, group == (paste(grp)))
+  file_loc<-(c(paste0(work_direct, "/temp/thin")))
+  
+  f_list <- list.files(file_loc, pattern=".csv", full.names = TRUE)
+  file.remove(f_list)
+  
+  thin(subgrp, lat.col = "lat", long.col = "lon", spec.col = "species", thin.par = 1, reps = 1, out.base=c(paste0("arabis_", grp)), out.dir = c(paste0(file_loc)))
+  
+  #subthin<-read.csv(c(paste0(file_loc, "/arabis_", grp, "_thin1.csv")))
+  
+  f_list <- list.files(file_loc, pattern=".csv", full.names = TRUE)
+  subthin<-list()
+  
+  files<-dir(file_loc)
+  files<-unique(files)
+  for(file in files){
+    temp<-read.csv(c(paste0(file_loc, "/", file)))
+    subthin[[file]]<-temp    
+  }
+
+  subthin<-do.call(rbind, subthin)
+  subthin$group<-paste0(grp)
+  grp_list[[paste0(grp)]]<-subthin  
+}
+
+grp_list<-do.call(rbind, grp_list)
+#unique(abdecade$group)
+
+abcrop<-grp_list
+
+write.csv(abcrop, paste0(point_path, "/Euro/thinned_data.csv")) # Provided in GITHUB repository
+
+rm(groups, grp_list, f_list, file, file_loc, grp, temp, subthin, subgrp, files)
