@@ -9,4 +9,25 @@ GBIF data has also been provided. This is after the occurence data were cropped 
 There is script for "1_Packages_and_Functions" which includes all the packages and functions used to create the models. This should be run before any other script to ensure functions and commands work properly. 
 
 ## Model Script
-This is currently being tidied up for publication, and will become available
+The model script can be found in these files, split into sections which cover different components.
+
+### Script order/contents
+> Chelsa Climate layers
+ - Current
+ - Hindcast
+ - Future
+> GBIF Occurence data
+ - Loading in data
+ - Thinning data
+ - Calculating spatial autocorrelation
+ - Spatially partitioning occurence data
+> Preliminary Models
+ - Calculating Variance Inflation Factor
+ - Create and compare multiple preliminary models
+> Model Creation
+ - Create and visualise current suitability model
+ - Create and visualise LGM 21k bp suitability model
+ - Create and visualise forecast suitability model
+> Other
+ - Calculate difference in available suitable habitat
+ - Calculate changes in elevation under projected climates
