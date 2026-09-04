@@ -13,9 +13,9 @@ The model script can be found in these files, split into sections which cover di
 
 ### Script order/contents
 > Chelsa Climate layers
- - Current
- - Hindcast
- - Future
+ - Download and crop current
+ - Download and crop hindcast
+ - Download and crop future
 > GBIF Occurence data
  - Loading in data
  - Thinning data
