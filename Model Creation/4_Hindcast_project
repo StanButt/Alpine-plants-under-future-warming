@@ -1,0 +1,291 @@
+#Create Hindcast Mods ####
+
+# to save time and CPU, hindcast timeframes could be selected and just the desired ones computed (see next section
+
+plan(multisession, workers = 4)  
+
+# Adjust workers 
+options(future.globals.maxSize = 12 * 1024^3)
+
+options(timeout = 600)  
+getOption("timeout")
+
+uniq<-names(chelsa_crop)
+  
+  future_lapply(uniq, function(year) {
+
+    save_path<-paste0(hdd_local, "/Data/rf_modelv2.rds")
+    raf_ab<-readRDS(save_path)
+
+    save_loc<-paste0(proj_save, "/Hindcast/lgm_", year, ".tif")
+
+    if(file.exists(save_loc)){
+    log_file<-paste0(hdd_local, "/hind_track_v2.txt")
+    log_msg <- paste(Sys.time(), "- exists:", year, "\n")
+    write(log_msg, file = c(log_file),append = TRUE)
+    
+    return(invisible(NULL))}else{
+          
+      log_file<-paste0(hdd_local, "/hind_track_v2.txt")
+      log_msg <- paste(Sys.time(), "- processing:", year, "\n")
+      write(log_msg, file = c(log_file), append = TRUE) # a log txt file tracks progress across workers
+
+string1 <- paste0(hdd_local, "/Layers/Hindcast/Crop/crop_", year, ".tif")
+
+      
+    rast<-rast(string1)
+    rast<-keep_layers(rast, bioclim_layers)
+    #rast[["bio03"]]<-(rast[["bio03"]]/100)
+    
+# Project to LGM
+lgm_pred <- sdm_predict(
+  models = raf_ab,
+  pred = rast,  # SpatRaster
+  thr = "max_sens_spec",
+  con_thr = FALSE
+)
+    
+  lgm_rast<-lgm_pred$raf$raf
+  lgm_max<-lgm_pred$raf$max_sens_spec
+  
+    
+  writeRaster(lgm_rast, filename=paste0(proj_save, "/Hindcast/lgm_", year, "_v2.tif"), overwrite=TRUE)
+  writeRaster(lgm_max, filename=paste0(proj_save, "/Hindcast/max_", year, "_v2.tif"), overwrite=TRUE)
+  saveRDS(lgm_pred, file = paste0(proj_save, "/Hindcast/", year, "_sdm_v2.rds"))
+    
+    }})
+plan(sequential)
+
+# Run selected hindcast years ####
+
+hind_yrs<-c("-190","-040")
+for (year in hind_yrs) {
+  
+  save_loc <- paste0(proj_save, "/Hindcast/lgm_", year, ".tif")
+    
+  string1 <- paste0(hdd_local, "/Layers/Hindcast/Crop/crop_", year, ".tif")
+  
+  rast <- rast(string1)
+  rast <- keep_layers(rast, bioclim_layers)
+  
+  # Project
+  lgm_pred <- sdm_predict(
+    models = raf_ab,
+    pred = rast,
+    thr = "max_sens_spec",
+    con_thr = FALSE
+  )
+  
+  lgm_rast <- lgm_pred$raf$raf
+  lgm_max  <- lgm_pred$raf$max_sens_spec
+  
+  writeRaster(lgm_rast, filename = paste0(proj_save, "/Hindcast/lgm_", year, "_v2.tif"), overwrite=TRUE)
+  writeRaster(lgm_max,  filename = paste0(proj_save, "/Hindcast/max_", year, "_v2.tif"), overwrite=TRUE)
+  saveRDS(lgm_pred, file = paste0(proj_save, "/Hindcast/", year, "_sdm_v2.rds"))
+  
+}
+
+
+## Hindcast MESS ####
+
+current_OG<-current
+
+ # hind_yrs<-c("-190","-040")
+mess_list<-list()
+mess_summ<-list()
+# Extract training environment from your occurrence points
+
+  coords_clean <- abcrop[, c("lon", "lat")]
+  coords_clean <- coords_clean[complete.cases(coords_clean), ]
+  coords_clean <- coords_clean[!duplicated(coords_clean), ]
+
+current<-keep_layers(current, bioclim_layers)
+train_vals <- extract(current, coords_clean)
+train_vals <- train_vals[, -1]  # remove ID column that 'mess' doesnt like
+train_vals <- train_vals[complete.cases(train_vals), ]
+
+hind_name<-list.files(paste0(hdd_local, "/Layers/Hindcast/Crop"))
+
+hind_name2<-c("-190", "-040")
+
+for(h_year in hind_name2){
+
+# string1 <- paste0(hdd_local, "/Layers/Hindcast/Crop/", h_year)
+
+# nm<-sub("crop_", "", h_year)
+# nm<-sub(".tif", "", nm)
+
+string1 <- paste0(hdd_local, "/Layers/Hindcast/Crop/crop_", h_year, ".tif")
+  
+    rast<-rast(string1)
+    rast<-keep_layers(rast, bioclim_layers)
+
+mess_result <- dismo::mess(
+  x = raster::stack(rast),   # dismo needs a raster stack
+  v = train_vals,
+  full = FALSE
+)
+
+# Convert back to SpatRaster
+mess_spat <- rast(mess_result)
+# plot(mess_spat)
+mess_list[[h_year]]<-mess_spat
+  
+  string2 <- paste0(hdd_local, "/Data/mess_rast", h_year, ".tif")
+  writeRaster(mess_spat, (string2))
+
+# plot(mess_spat, main = "MESS - negative = novel environment")
+
+# Proportion of study area with novel conditions
+total_cells <- global(!is.na(mess_spat), sum)
+novel_cells <- global(mess_spat < 0, sum, na.rm = TRUE)
+
+mess_sum<-as.data.frame(h_year)
+mess_sum$total<-(total_cells$sum)
+mess_sum$novel<-novel_cells$sum
+mess_sum$prop<-round(novel_cells$sum / total_cells$sum, 3)
+
+  mess_summ[[h_year]]<-mess_sum}
+
+# list for mess spatraster
+#df for proportion study area
+
+mess_summ<-do.call(rbind, mess_summ)
+
+##
+saveRDS(mess_result, file=paste0(hdd_local, "/Data/mess_result_v2.rds"))
+saveRDS(mess_summ, file=paste0(hdd_local, "/Data/mess_summ_v2.rds"))
+saveRDS(mess_list, file=paste0(hdd_local, "/Data/mess_list_v2.rds"))
+
+
+for(each in names(mess_list)) {
+
+mess2<-mess_list[[each]]
+
+ # string1 <- paste0(hdd_local, "/Layers/Hindcast/mess/mess_", each, "_v2.tif")
+  # writeRaster(mess2, filename = string1, overwrite = TRUE)
+#  mess2<-rast(paste0(hdd_local, "/Layers/Hindcast/mess/mess_", each, "_v2.tif"))
+
+  
+ras<-rast(paste0(proj_save, "/Hindcast/lgm_", each, ".tif"))
+bin<-rast(paste0(proj_save, "/Hindcast/max_", each, ".tif"))  
+  
+messbin<-mess2>0
+messbin2<-mess2<0
+  
+  messbin <- ifel(messbin == 1, 1, NA)
+  messbin2 <- ifel(messbin2 == 1, 1, NA)
+  bin <- ifel(bin == 1, 1, NA)
+  
+  messbin<-as.polygons(messbin)
+  messbin2<-as.polygons(messbin2)
+  
+  csdm_mask <- terra::mask(bin, messbin)
+  csdm_mask_i <- terra::mask(bin, messbin, inverse=TRUE)
+
+  pol1<-as.polygons(csdm_mask)
+  pol_i<-as.polygons(csdm_mask_i)
+
+  pol1 <- project(pol1, crs(ras))
+  pol_i <- project(pol_i, crs(ras))  
+  
+  png(filename = file.path(fig_dir, paste0("MESS_", each, "_v3.png")),
+  width = 2000,
+  height = 1600,
+  res = 200, type="cairo")
+
+
+terra::plot(ras, main=paste0(each), col="moccasin", background="azure1", box=FALSE, mar=c(2.7, 2.7, 2.1, 12), cex.lab=1.2, xlab="Latitude", ylab="Longitude",  pax=list(cex.axis=1.4), legend=FALSE)
+
+if (length(pol1) > 0) {plot(pol1, add = TRUE, border = NA, lwd = 1, col = adjustcolor("olivedrab3", 1))}
+if (length(pol_i) > 0) {plot(pol_i, add = TRUE, border = NA, lwd = 1, col = adjustcolor("coral2", 1))}
+
+  legend("bottomright",
+  inset = c(-0.3, 0.18),
+  legend = " Suitable habitat\n (+ MESS)",
+  col = "white",
+  lwd = 0.0, 
+  bty = "n",
+  bg = "white",
+  cex = 1.2, 
+  xpd=TRUE, 
+  horiz=TRUE
+)
+
+    legend("bottomright",
+  inset = c(-0.05,0.2),
+  legend = "",
+  col = "olivedrab3",
+  lwd = 20, 
+  bty = "n",
+  bg = "white",
+  cex = 0.4, 
+  xpd=TRUE, 
+  horiz=TRUE
+)
+  
+    legend("bottomright",
+  inset = c(-0.3, 0.08),
+  legend = " Suitable habitat\n (- MESS)",
+  col = "white",
+  lwd = 0.0, 
+  bty = "n",
+  bg = "white",
+  cex = 1.2, 
+  xpd=TRUE, 
+  horiz=TRUE
+)
+  
+      legend("bottomright",
+  inset = c(-0.05,0.1),
+  legend = "",
+  col = "coral2",
+  lwd = 20, 
+  bty = "n",
+  bg = "white",
+  cex = 0.4, 
+  xpd=TRUE, 
+  horiz=TRUE
+)
+  
+
+
+    # Scale Bar
+    sbar(1000, xy=c(-16, 71), type="bar", divs=4, cex=.8)
+# Arrow 
+  
+  arrow_x1 <- -7  
+  arrow_y_tip1 <- 79
+  arrow_y_base1 <- 78
+
+  
+  arrow_x2 <- -7
+  arrow_y_tip2 <- 77.8
+  arrow_y_base2 <- 77.4
+
+  
+
+  # Draw arrow shaft
+  arrows(x0 = arrow_x1, y0 = arrow_y_base1, 
+        x1 = arrow_x1, y1 = arrow_y_tip1,
+        length = 0.4, lwd = 7, col = "black", angle = 20)
+  
+  arrows(x0 = arrow_x2, y0 = arrow_y_base2, 
+        x1 = arrow_x2, y1 = arrow_y_tip2,
+        length = 0.25, lwd = 5, col = "grey30", angle = 20)
+  
+  # Add "N" label
+  text(x = arrow_x1, y = arrow_y_base2 -2.5, labels = "N", cex = 1.2, font = 2)
+  
+  # Add decorative circle at base (optional)
+  # points(arrow_x, arrow_y_base2-2.5, pch = 3 , bg = "white", col = "black", cex = 1.5, lwd = 2)
+  
+
+# Binary suitable habitat (TSS-optimised threshold)
+  
+  
+dev.off()
+
+
+}
+
