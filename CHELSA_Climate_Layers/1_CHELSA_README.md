@@ -1,6 +1,6 @@
 # CHELSA DATA
 
-##Why script, no raster? 
+## Why script, no raster? 
 
 Raster files were large, and couldn't be uploaded. Instead, this script can be used to upload the rasters and process them in the same way they were for the Alpine models. 
 
