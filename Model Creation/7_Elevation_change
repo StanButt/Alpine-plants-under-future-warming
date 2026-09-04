@@ -1,0 +1,74 @@
+curr_bin <- rast(paste0(proj_save, "/max_rast.tif"))
+cbin_mask <- ifel(curr_bin == 1, 1, NA)
+
+celev_mask <- terra::mask(elevcrop, cbin_mask)
+elev_dat_current <- as.data.frame(celev_mask, xy = FALSE, na.rm = TRUE)  # Added na.rm
+elev_dat_current$proj <- "current"
+elev_dat_current$year <- "current"
+
+elev_results[[1]] <- elev_dat_current
+
+# Counter for list
+counter <- 2
+
+# Future projections
+for(year in years){
+  for(proj in ssp){
+    
+    cat(year, proj, "\n")
+    
+    # Load binary projection
+    bin_file <- paste0(proj_save, "/Projected/max_", year, proj, ".tif")
+    
+    if(!file.exists(bin_file)) {
+      cat("  File not found:", bin_file, "\n")
+      next
+    }
+    
+    bin <- rast(bin_file)
+    bin_mask <- ifel(bin == 1, 1, NA)
+    
+    # Mask elevation
+    elev_mask <- terra::mask(elevcrop, bin_mask)
+    elev_dat1 <- as.data.frame(elev_mask, xy = FALSE, na.rm = TRUE)
+    
+    # Check suitable habitat 
+    if(nrow(elev_dat1) == 0) {
+      cat("  WARNING: No suitable habitat for", year, proj, "\n")
+      next
+    }
+    
+    elev_dat1$proj <- proj
+    elev_dat1$year <- year
+  
+    elev_results[[counter]] <- elev_dat1
+    counter <- counter + 1
+    
+    rm(elev_mask, elev_dat1, bin_mask, bin)
+    gc()
+  }
+}
+
+elev_dat <- bind_rows(elev_results)
+
+str(elev_dat)
+table(elev_dat$proj, elev_dat$year)
+
+
+# Density plot
+ggplot(test2, aes(x = elevation, fill = interaction(year, proj))) +
+  geom_density(alpha = 0.4) +
+  labs(title = "Elevation distribution of suitable habitat",
+       x = "Elevation (m)", y = "Density") +
+  theme_minimal()
+
+# Summary table
+elev_summary <- elev_dat %>%
+  group_by(year, proj) %>%
+  summarise(
+    mean_elev = mean(elevation, na.rm = TRUE),
+    median_elev = median(elevation, na.rm = TRUE),
+    min_elev = min(elevation, na.rm = TRUE),
+    max_elev = max(elevation, na.rm = TRUE),
+    n_cells = n()
+  )
