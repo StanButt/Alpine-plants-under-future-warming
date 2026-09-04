@@ -1,0 +1,88 @@
+# Calculate Suitable habitat changes ####
+
+dist_poly2<-dist_poly
+
+dist_poly<-list()
+
+name1<-paste0("current")
+
+non<-vect(st_read(paste0(proj_save, "/polygons/", name1, "_non_", name1, ".shp")))
+dist<-vect(st_read(paste0(proj_save, "/polygons/", name1, "_dist_", name1, ".shp")))
+    
+    dist_poly[[name1]][[paste0(name1, "_non")]]<-non
+    dist_poly[[name1]][[paste0(name1, "_dist")]]<-dist
+
+for(year in years){
+  for(proj in ssp){
+
+name1<-paste0(proj, "_non")
+name2<-paste0(proj, "_dist")
+    
+  non<-vect(st_read(paste0(proj_save, "/polygons/", name1, "_", year, ".shp")))
+  dist<-vect(st_read(paste0(proj_save, "/polygons/", name2, "_", year, "_shp")))
+    
+    dist_poly[[year]][[name1]]<-non
+    dist_poly[[year]][[name2]]<-dist
+  }
+}
+
+area_list <- list()
+
+curr_bin<-rast(paste0(proj_save, "/max_rast_v2.tif"))
+
+cell_area_km2 <- terra::cellSize(curr_bin, unit = "km")
+habitat_all <- sum(values(cell_area_km2)[values(curr_bin) == 1], na.rm = TRUE)
+
+habitat_all<-as.data.frame(habitat_all)
+habitat_all$habitat_dist<-(habitat_all)[[1]]
+habitat_all$diff<-0
+habitat_all$diff_dist<-0
+habitat_all$proj<-"current"
+habitat_all$year<-"current"
+
+
+for(year in years){
+for(proj in ssp){
+
+  # For original binary
+bin<-rast(paste0(proj_save, "/Projected/max_", year, proj,"_v2.tif"))
+
+cell_area_km2 <- terra::cellSize(bin, unit = "km")
+habitat_area <- sum(values(cell_area_km2)[values(bin) == 1], na.rm = TRUE)
+current_hab<-subset(habitat_all, proj=="current")
+habitat_area<-as.data.frame(habitat_area)
+  
+
+  bin_dist<-dist_poly[[year]][[paste0(proj, "_dist")]]
+  bin_dist <- project(bin_dist, "EPSG:3035")
+  area_km2v <- expanse(bin_dist, unit="km")
+  total_ar<-sum(area_km2v)
+
+  loss<-(current_hab$habitat_all-habitat_area[[1]])
+  loss2<-(current_hab$habitat_all-total_ar)
+  
+  
+  habitat_area$diff<-(loss/current_hab$habitat_all)*100
+  habitat_area$habitat_dist<-total_ar
+  habitat_area$diff_dist<-(loss2/current_hab$habitat_all)*100
+  habitat_area$proj<-paste(proj)
+  habitat_area$year<-paste(year)
+ 
+  colnames(habitat_area)[[1]]<-"habitat_all"
+   
+
+  # for dist binary ##
+
+
+   
+  habitat_all<-rbind(habitat_all, habitat_area)
+
+  rm(habitat_area)
+}}
+
+
+habit_dir<-("file_location/save_habitat/...")
+
+write.csv(habitat_all, habit_dir)
+
+head(habitat_all)
