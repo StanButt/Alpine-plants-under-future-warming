@@ -8,3 +8,9 @@ GBIF query criteria included
  - Scientific Name: Arabis alpina
    
 Original data included 40,459 records composed of records from 337 datasets; 154 publishers, 34 publishing countries. 
+
+Data provided is the thinned data, previously grouped into decades and selecting those which align with the current climate raster. 
+
+## Script for Spatial Thinning 
+
+Showing how the decade data is cropped and thinned
