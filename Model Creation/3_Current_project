@@ -1,0 +1,196 @@
+#Create Current model ####
+
+current_sdm<-sdm_predict( models=raf_ab, 
+pred=current, 
+thr="max_sens_spec", 
+con_thr=FALSE)
+
+curr_rast<-(current_sdm$raf$raf)
+max_rast<-(current_sdm$raf$max_sens_spec)
+  
+writeRaster(curr_rast, filename = paste0(proj_save, "/curr_rast_v2.tif"))
+writeRaster(max_rast, filename = paste0(proj_save, "/max_rast_v2.tif"))
+saveRDS(current_sdm, file = paste0(proj_save, "/current_sdm_v2.rds"))
+ 
+
+  # Visualise current suitability ####
+  
+proj_save<-paste0("save_directory/...")
+bin<-rast(paste0(proj_save, "/max_rast_v2.tif"))
+
+cbin_mask <- ifel(bin == 1, 1, NA)
+
+abcrop2<-abcrop
+coordinates(abcrop2) <- ~lon+lat
+proj4string(abcrop2) <- CRS("+proj=longlat +datum=WGS84")
+
+
+polyab <- as.polygons(vect(abcrop2, type="lines"))
+polyab<-vect(abcrop2, type="lines")
+polyab <- hull(polyab, type="concave_length")
+
+# Buffer width should be in m. adding 1.5km for dispersal buffer
+polyab <- project(polyab, "EPSG:3035")
+polyab<-buffer(polyab, 1500)
+
+#reproject back
+polyab <- project(polyab, crs(bin))
+
+
+csdm_mask <- terra::mask(cbin_mask, polyab)
+csdm_mask_i <- terra::mask(cbin_mask, polyab, inverse=TRUE)
+
+
+pol <- as.polygons(csdm_mask, dissolve = TRUE)
+pol_i <- as.polygons(csdm_mask_i, dissolve = TRUE)
+
+ 
+  ras<-rast(paste0(proj_save, "/curr_rast_v2.tif"))
+  bin<-rast(paste0(proj_save, "/max_rast_v2.tif"))
+
+titl<-paste("Current")
+
+fig_dir<-("directory/too_figures/...")
+  
+png(filename = file.path(fig_dir, paste0("current_v2.png")),
+  width = 2000,
+  height = 1600,
+  res = 200, type="cairo")
+
+terra::plot(ras, main=paste0(titl), col="moccasin", background="azure1", box=FALSE, mar=c(2.7, 2.7, 2.1, 12), cex.lab=1.2, xlab="Latitude", ylab="Longitude",  pax=list(cex.axis=1.4), legend=FALSE)
+
+plot(pol, add = TRUE,  border = NA, lwd = 1,  col = adjustcolor("olivedrab3", 1))
+plot(pol_i, add = TRUE,  border = NA, lwd = 1,  col = adjustcolor("coral2", 1))
+  
+  legend("bottomright",
+  inset = c(-0.3, 0.18),
+  legend = " Suitable habitat\n (within dispersal)",
+  col = "white",
+  lwd = 0.0, 
+  bty = "n",
+  bg = "white",
+  cex = 1.2, 
+  xpd=TRUE, 
+  horiz=TRUE
+)
+
+    legend("bottomright",
+  inset = c(-0.05,0.2),
+  legend = "",
+  col = "olivedrab3",
+  lwd = 20, 
+  bty = "n",
+  bg = "white",
+  cex = 0.4, 
+  xpd=TRUE, 
+  horiz=TRUE
+)
+  
+    legend("bottomright",
+  inset = c(-0.31, 0.08),
+  legend = " Suitable habitat\n (outside dispersal)",
+  col = "white",
+  lwd = 0.0, 
+  bty = "n",
+  bg = "white",
+  cex = 1.2, 
+  xpd=TRUE, 
+  horiz=TRUE
+)
+  
+      legend("bottomright",
+  inset = c(-0.05,0.1),
+  legend = "",
+  col = "coral2",
+  lwd = 20, 
+  bty = "n",
+  bg = "white",
+  cex = 0.4, 
+  xpd=TRUE, 
+  horiz=TRUE
+)
+  
+  
+# Add centroid 
+
+  # cent<-centroids(pol)
+    
+  #  cent_coords_curr <- crds(cent)
+  #  print(cent_coords_curr)
+  #  points(cent, col="red", pch=13, cex=3)
+    
+        
+# Scale Bar
+    sbar(1000, xy=c(-16, 71), type="bar", divs=4, cex=.8)
+# Arrow 
+  
+  arrow_x1 <- -7  
+  arrow_y_tip1 <- 79
+  arrow_y_base1 <- 78
+
+  
+  arrow_x2 <- -7
+  arrow_y_tip2 <- 77.8
+  arrow_y_base2 <- 77.4
+
+  
+
+  # Draw arrow shaft
+  arrows(x0 = arrow_x1, y0 = arrow_y_base1, 
+        x1 = arrow_x1, y1 = arrow_y_tip1,
+        length = 0.4, lwd = 7, col = "black", angle = 20)
+  
+  arrows(x0 = arrow_x2, y0 = arrow_y_base2, 
+        x1 = arrow_x2, y1 = arrow_y_tip2,
+        length = 0.25, lwd = 5, col = "grey30", angle = 20)
+  
+  # Add "N" label
+  text(x = arrow_x1, y = arrow_y_base2 -2.5, labels = "N", cex = 1.2, font = 2)
+
+
+  
+dev.off()
+
+# Calculate suitable habitat area ####
+
+bin<-rast(paste0(proj_save, "/max_rast.tif"))
+cbin_mask <- ifel(bin == 1, 1, NA)
+
+abcrop2<-abcrop
+coordinates(abcrop2) <- ~lon+lat
+proj4string(abcrop2) <- CRS("+proj=longlat +datum=WGS84")
+
+
+polyab <- as.polygons(vect(abcrop2, type="lines"))
+polyab<-vect(abcrop2, type="lines")
+polyab <- hull(polyab, type="concave_length")
+
+# Buffer width should be in m. adding 1.5km for dispersal buffer
+polyab <- project(polyab, "EPSG:3035")
+polyab<-buffer(polyab, 1500)
+
+#reproject back
+polyab <- project(polyab, crs(bin))
+
+csdm_mask <- terra::mask(cbin_mask, polyab)
+csdm_mask_i <- terra::mask(cbin_mask, polyab, inverse=TRUE)
+
+pol <- as.polygons(csdm_mask, dissolve = TRUE)
+pol_i <- as.polygons(csdm_mask_i, dissolve = TRUE)
+
+
+maskall<-mask(curr_rast, pol, updatevalue=0)
+maskdiff<-mask(curr_rast, pol_i, updatevalue=0)
+
+mask_bin1<-maskall>0
+mask_bin2<-maskdiff>0
+
+cell_area1 <- terra::cellSize(maskall, unit = "km")
+cell_area2 <- terra::cellSize(maskdiff, unit = "km")
+
+habitat_area <- sum(values(cell_area1)[values(mask_bin1) == 1], na.rm = TRUE)
+habitat_diff <- sum(values(cell_area2)[values(mask_bin2) == 1], na.rm = TRUE)
+
+total_suit<-habitat_area+habitat_diff
+within_suit<-habitat_area
+difference<-habitat_diff
