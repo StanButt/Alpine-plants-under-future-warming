@@ -1,0 +1,67 @@
+# Select Appropriate model from prelim
+
+raf_ab<-models_all$RF
+mod<-raf_ab$model
+
+proj_save<-paste0("file directory to save path/... ")
+
+## Response Curves ####
+
+variable<-names(current)
+
+plot_list<-list()
+ 
+  train_pred <- dat_extr[, variable]
+
+for (each in variable) {
+  plot_list[[each]] <- pdp::partial(
+    object   = mod,
+    pred.var = each,
+    train    = train_pred,
+    prob     = TRUE,
+    which.class=2,
+    grid.resolution = 50 )
+}
+
+# access yhat values for manuscript
+ # max1<-max(plot_list$bio04$yhat)
+ # subset(plot_list$bio04, yhat == max1 )
+
+var_lookup <- data.frame(
+  var_code = c(variable),
+  var_name = c(
+    "Mean Diurnal Near-Surface Air Temperature Range (°C)",
+    "Isothermality (°C)",
+    "Temperature Seasonality (SD of mean monthly temperature in °C)",
+    "Precipitation of the Wettest Month (kg m-2 month-1)",
+    "Precipitation of the Driest Month (kg m-2 month-1)",
+    "Mean Monthly Precipitation of the Warmest Quarter (kg m-2 month-1)",
+    "Mean Monthly Precipitation of the Coldest Quarter (kg m-2 month-1)",
+    "Snow Cover Days"
+  ),
+  stringsAsFactors = FALSE
+)
+
+for(each in variable){
+  
+  # Get data
+  data <- plot_list[[each]]
+  data<-as.data.frame(data)
+
+  var_info <- var_lookup[var_lookup$var_code == each, ]
+
+  colnames(data)[which(names(data) == each)] <- var_info$var_name
+  colnames(data)[which(names(data) == "yhat")] <- "Predicted Suitability (y)"
+
+xvar<-c(var_info$var_name)
+yvar<-c("Predicted Suitability (y)")
+    
+  p <- ggplot(data, aes(.data[[xvar]], .data[[yvar]])) +
+       geom_smooth(method = "loess", color = "red", se = TRUE) +
+    theme_light()
+  
+  save_path<-paste0(hdd_local, "/Figures/Plots/", each, ".png")
+  
+  ggsave(save_path, plot=p, width = 6, height = 4.75)
+} 
+
