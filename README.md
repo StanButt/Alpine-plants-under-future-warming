@@ -13,8 +13,10 @@ The model script can be found in these files, split into sections which cover di
 
 ### Script order/contents
 > Chelsa Climate layers
+ - Load/Download Europe shapefile
  - Download and crop current
  - Download and crop hindcast
+   - Hindcast URL list in .txt
  - Download and crop future
 > GBIF Occurence data
  - Loading in data
