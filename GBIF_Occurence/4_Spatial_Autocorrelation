@@ -1,0 +1,59 @@
+
+# Extract and clean coordinates
+  coords_clean <- abcrop[, c("lon", "lat")]
+  coords_clean <- coords_clean[complete.cases(coords_clean), ]
+  
+# Remove duplicate points
+  coords_clean <- coords_clean[!duplicated(coords_clean), ]
+  cat("Points after deduplication:", nrow(coords_clean), "\n")
+  
+  # Convert to matrix for extraction
+  coords_matrix <- as.matrix(coords_clean)
+    
+env_values <- extract(current, coords_matrix)
+
+# For a multi-layer raster, find rows where ALL variables are non-NA
+valid_indices <- complete.cases(env_values)
+coords_valid <- coords_matrix[valid_indices, ]
+env_values_clean <- env_values[valid_indices, ]
+  
+head(env_values_clean)
+
+# neighbours 
+k_neighbors <- 8
+nb <- knn2nb(knearneigh(coords_valid, k = k_neighbors))
+listw_clean <- nb2listw(nb, style = "W")
+
+# Loop each layer
+moran_results <- lapply(colnames(env_values_clean), function(var) {
+  result <- moran.test(env_values_clean[, var], listw_clean, alternative = "greater")
+  data.frame(
+    variable = var,
+    morans_I = result$estimate["Moran I statistic"],
+    expect = result$estimate["Expectation"],
+    variance = result$estimate["Variance"],
+    SD = result$statistic,
+    p_value  = format(result$p.value, scientific = TRUE, digits = 10)
+  )
+})
+
+
+moran_table <- do.call(rbind, moran_results)
+
+rownames(moran_table) <- NULL
+# means 
+means_row <- data.frame(
+  variable    = "Mean",
+  morans_I    = round(mean(moran_table$morans_I), 4),
+  expect = round(mean(moran_table$expect), 6),
+  variance    = round(mean(moran_table$variance), 8),
+  SD   = round(mean(moran_table$SD), 2),
+  p_value     = "< 2.2e-16"
+)
+
+
+moran_table_final <- rbind(moran_table, means_row)
+print(moran_table_final)
+
+
+  print(moran_table)
