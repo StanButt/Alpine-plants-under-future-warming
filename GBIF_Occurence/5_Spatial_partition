@@ -1,0 +1,46 @@
+  abcrop$presence<-1
+  
+  current_lowres <- aggregate(current, fact = 10, fun = "mean")
+  
+  #pseudo absence
+  pa_arabis <- sample_pseudoabs(data = abcrop,
+                                x="lon", 
+                                y="lat",
+                                n=nrow(abcrop)*1,
+                                method=c('kmeans', env=current_lowres),
+                                rlayer = (current_lowres[[1]])
+  )
+    
+  pa_arabis2<-rename(pa_arabis, presence=pr_ab)
+  
+  head(abcrop)
+  head(pa_arabis2)
+  
+  pa_arabis2$species<-"arabis"
+  pa_arabis2$group<-"pseudo"
+  
+  abcrop_new<-rbind(abcrop, pa_arabis2)
+  
+  head(abcrop_new)
+  
+  # Partition data with SPATIAL methods
+  
+  current_midres <- aggregate(current, fact = 5, fun = "mean") # increases speed, resolution doesnt change size of block. 
+  # Time 9.39
+  
+  Sys.time
+  
+  data_part <- part_sblock( env_layer = current_midres, 
+                            data = abcrop_new,
+                            pr_ab = "presence",
+                            x = "lon",
+                            y = "lat",
+                            n_part = 5,
+                            min_res_mult = 10, 
+                            max_res_mult = 80,
+                            num_grids = 5, 
+                            min_occ = 10)
+    
+  saveRDS(data_part, file = paste0(hdd_local, "/Data/sblock_arabis.rds"))
+  gc()
+  
