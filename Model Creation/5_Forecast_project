@@ -1,0 +1,258 @@
+## Create Forecast Models ####
+
+direct1<-paste0(hdd_local, "/Layers/Forecast/chelsa_crop")
+
+plan(multisession, workers = 4)  
+
+# Adjust workers based on  CPU 
+options(future.globals.maxSize = 12 * 1024^3)
+
+options(timeout = 600) 
+getOption("timeout")
+
+# export model and only load in required one
+  
+  future_lapply(years, function(year) {
+
+    save_path<-paste0(hdd_local, "/Data/rf_modelv2.rds")
+    raf_ab<-readRDS(save_path)
+  
+  for(proj in ssp){
+spat_list<-list()
+
+    for(bio in bioclim_layers){
+
+      direct2<-path(direct1, year, bio, proj)
+
+      ras<-rast(paste0(direct2, "/", bio, "_mcrop_v2.tif"))
+
+      spat_list[[bio]]<-ras
+      
+    }
+cat("\n", proj, year, "\n")
+
+forecast_pred <- sdm_predict(
+  models = raf_ab,
+  pred = spat_list,  # SpatRaster
+  thr = "max_sens_spec",
+  con_thr = FALSE
+)
+
+  fore_rast<-forecast_pred$raf$raf
+  fore_max<-forecast_pred$raf$max_sens_spec
+  
+    
+  writeRaster(fore_rast, filename=paste0(proj_save, "/Projected/", year, proj, "_v2.tif"))
+  writeRaster(fore_max, filename=paste0(proj_save, "/Projected/max_", year, proj,  "_v2.tif"))
+  saveRDS(forecast_pred, file = paste0(proj_save, "/Projected/", year, proj, "_sdm_v2.rds"))
+  }
+
+  
+})
+  
+
+
+plan(sequential)
+
+
+## Visualise forecast Models ####
+
+# Create current distribution polygon 
+
+curr_bin<-rast(paste0(proj_save, "/max_rast_v2.tif"))
+
+cbin_mask <- ifel(curr_bin == 1, 1, NA)
+
+abcrop2<-abcrop
+coordinates(abcrop2) <- ~lon+lat
+proj4string(abcrop2) <- CRS("+proj=longlat +datum=WGS84")
+
+polyab <- as.polygons(vect(abcrop2, type="lines"))
+polyab<-vect(abcrop2, type="lines")
+polyab <- hull(polyab, type="concave_length")
+
+# Buffer width shold be in m. adding 50km for reasonable buffer
+polyab <- project(polyab, "EPSG:3035")
+polyab<-buffer(polyab, 1500)
+
+#reproject back
+polyab <- project(polyab, crs(curr_bin))
+
+csdm_mask <- terra::mask(cbin_mask, polyab)
+csdm_mask_i <- terra::mask(cbin_mask, polyab, inverse=TRUE)
+
+
+cupol <- as.polygons(csdm_mask, dissolve = TRUE)
+cupol_i <- as.polygons(csdm_mask_i, dissolve = TRUE)
+
+dist_poly<-list()
+
+dist_poly[["current"]][["current_dist"]]<-cupol
+dist_poly[["current"]][["current_non"]]<-cupol_i
+
+# pol<-pol[pol$max_sens_spec==1,]
+
+years<-c("2011-2040", "2041-2070", "2071-2100")
+ssp<-c("ssp126", "ssp370", "ssp585")
+
+  centroid_list<-list()
+  
+for(proj in ssp){
+
+  pol1<-cupol
+
+for(year in years){
+  ras<-rast(paste0(proj_save, "/Projected/", year, proj,"_v2.tif"))
+  bin<-rast(paste0(proj_save, "/Projected/max_", year, proj,"_v2.tif"))
+    
+bin_mask <- ifel(bin == 1, 1, NA)
+
+# Buffer width shold be in m. adding 1.5km for dispersal distancer
+pol1 <- project(pol1, "EPSG:3035")
+pol1<-buffer(pol1, 1500)
+
+#reproject back
+pol1 <- project(pol1, crs(bin))
+
+sdm_mask <- terra::mask(bin_mask, pol1)
+sdm_mask_i <- terra::mask(bin_mask, pol1, inverse=TRUE)
+
+pol1 <- as.polygons(sdm_mask, dissolve = TRUE)
+pol_i <- as.polygons(sdm_mask_i, dissolve = TRUE)
+
+dist_poly[[year]][[paste0(proj, "_dist")]]<-pol1
+dist_poly[[year]][[paste0(proj, "_non")]]<-pol_i
+
+titl<-paste(proj, year)
+
+  png(filename = file.path(fig_dir, paste0(proj, "_", year, "_v2.png")),
+  width = 2000,
+  height = 1600,
+  res = 200, type="cairo")
+
+terra::plot(ras, main=paste0(titl), col="moccasin", background="azure1", box=FALSE, mar=c(2.7, 2.7, 2.1, 12), cex.lab=1.2, xlab="Latitude", ylab="Longitude",  pax=list(cex.axis=1.4), legend=FALSE)
+
+plot(pol1, add = TRUE,  border = NA, lwd = 1,  col = adjustcolor("olivedrab3", 1))
+plot(pol_i, add = TRUE,  border = NA, lwd = 1,  col = adjustcolor("coral2", 1))
+
+  
+  legend("bottomright",
+  inset = c(-0.3, 0.18),
+  legend = " Suitable habitat\n (within dispersal)",
+  col = "white",
+  lwd = 0.0, 
+  bty = "n",
+  bg = "white",
+  cex = 1.2, 
+  xpd=TRUE, 
+  horiz=TRUE
+)
+
+    legend("bottomright",
+  inset = c(-0.05,0.2),
+  legend = "",
+  col = "olivedrab3",
+  lwd = 20, 
+  bty = "n",
+  bg = "white",
+  cex = 0.4, 
+  xpd=TRUE, 
+  horiz=TRUE
+)
+  
+    legend("bottomright",
+  inset = c(-0.31, 0.08),
+  legend = " Suitable habitat\n (outside dispersal)",
+  col = "white",
+  lwd = 0.0, 
+  bty = "n",
+  bg = "white",
+  cex = 1.2, 
+  xpd=TRUE, 
+  horiz=TRUE
+)
+  
+      legend("bottomright",
+  inset = c(-0.05,0.1),
+  legend = "",
+  col = "coral2",
+  lwd = 20, 
+  bty = "n",
+  bg = "white",
+  cex = 0.4, 
+  xpd=TRUE, 
+  horiz=TRUE
+)
+  
+    # Add centroid for dispersal
+  
+    cent<-centroids(pol1)
+    cent_coords <- crds(cent)
+    pol_v2<-as.polygons(bin_mask)
+    cent2<-centroids(pol_v2)
+    cent_coords2 <- crds(cent2)   
+    centroid_list[[year]][[paste0(proj, "_dist")]]<-cent_coords
+    centroid_list[[year]][[paste0(proj, "_all")]]<-cent_coords2
+  
+  # add centroid for all
+
+  centroid_all<-"no"
+  if(centroid_all=="yes"){
+
+    points(cent, col=adjustcolor("white", 0.5), pch=19, cex=3)
+    points(cent, col="red", pch=19, cex=2)
+    points(cent, col="black", pch=4, cex=3)
+
+    points(cent2, col=adjustcolor("white", 0.5), pch=19, cex=3)
+    points(cent2, col="red", pch=19, cex=2)
+    points(cent2, col="black", pch=4, cex=3)
+  }
+  #Save to list
+    
+
+   
+    # Scale Bar
+    sbar(1000, xy=c(-16, 71), type="bar", divs=4, cex=.8)
+# Arrow 
+  
+  arrow_x1 <- -7  
+  arrow_y_tip1 <- 79
+  arrow_y_base1 <- 78
+
+  
+  arrow_x2 <- -7
+  arrow_y_tip2 <- 77.8
+  arrow_y_base2 <- 77.4
+
+  
+
+  # Draw arrow shaft
+  arrows(x0 = arrow_x1, y0 = arrow_y_base1, 
+        x1 = arrow_x1, y1 = arrow_y_tip1,
+        length = 0.4, lwd = 7, col = "darkred", angle = 20)
+  
+  arrows(x0 = arrow_x2, y0 = arrow_y_base2, 
+        x1 = arrow_x2, y1 = arrow_y_tip2,
+        length = 0.25, lwd = 5, col = "lightblue", angle = 20)
+  
+  # Add "N" label
+  text(x = arrow_x1, y = arrow_y_base2 -2.5, labels = "N", cex = 1.2, font = 2)
+  
+  # Add decorative circle at base (optional)
+  # points(arrow_x, arrow_y_base2-2.5, pch = 3 , bg = "white", col = "black", cex = 1.5, lwd = 2)
+  
+
+# Binary suitable habitat (TSS-optimised threshold)
+  
+  
+dev.off()
+}}
+
+
+for(each in names(dist_poly)){
+  list1<-dist_poly[[each]]
+  for(name in names(list1)){
+    list2<-list1[[name]]
+poly_sv<-paste0(proj_save, "/polygons/", name, "_", each, ".shp")
+  writeVector(list2, poly_sv, overwrite=TRUE)
+}}
